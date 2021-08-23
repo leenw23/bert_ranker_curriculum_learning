@@ -20,7 +20,7 @@ from transformers import (BertConfig, BertForNextSentencePrediction, BertModel,
                           BertTokenizer)
 
 from preprocess_dataset import (get_dd_corpus, get_dd_multiref_testset)
-from selection_model import BertSelect, BertSelectAuxilary
+from selection_model import BertSelect
 from utils import (SelectionDataset, dump_config,
                    get_nota_token, get_uttr_token, load_model, recall_x_at_k,
                    set_random_seed, str2bool)
@@ -42,10 +42,7 @@ def main(args):
     for seed in seed_list:
         bert = BertModel.from_pretrained("bert-base-uncased")
         bert.resize_token_embeddings(len(tokenizer))
-        if args.is_aux_model:
-            model = BertSelectAuxilary(bert)
-        else:
-            model = BertSelect(bert)
+        model = BertSelect(bert)
         model = load_model(model, args.model_path.format(seed), 0, len(tokenizer))
 
     model.to(device)
@@ -96,37 +93,28 @@ def main(args):
         ).to(device)
         prediction_list = []
         with torch.no_grad():
-            if args.is_aux_model:
+            if args.model == "mcdrop":
                 assert len(model_list) == 1
-                with torch.no_grad():
-                    model = model_list[0]
-                    prediction_list.append(model.predict(ids, mask).cpu().numpy())
+                model = model_list[0]
+                model.train()
+                for forward_pass in range(5):
+                    with torch.no_grad():
+                        prediction_list.append(
+                            [float(el) for el in model(ids, mask).cpu().numpy()]
+                        )
                 prediction_list = np.array(prediction_list)
                 pred_list_for_current_context = np.mean(prediction_list, 0)
                 uncertainty_list_for_current_context = np.var(prediction_list, 0)
             else:
-                if args.model == "mcdrop":
-                    assert len(model_list) == 1
-                    model = model_list[0]
-                    model.train()
-                    for forward_pass in range(5):
-                        with torch.no_grad():
-                            prediction_list.append(
-                                [float(el) for el in model(ids, mask).cpu().numpy()]
-                            )
-                    prediction_list = np.array(prediction_list)
-                    pred_list_for_current_context = np.mean(prediction_list, 0)
-                    uncertainty_list_for_current_context = np.var(prediction_list, 0)
-                else:
-                    assert args.model in ["ensemble", "select", "nopt"]
-                    for model in model_list:
-                        with torch.no_grad():
-                            prediction_list.append(
-                                [float(el) for el in model(ids, mask).cpu().numpy()]
-                            )
-                    prediction_list = np.array(prediction_list)
-                    pred_list_for_current_context = np.mean(prediction_list, 0)
-                    uncertainty_list_for_current_context = np.var(prediction_list, 0)
+                assert args.model in ["ensemble", "select", "nopt"]
+                for model in model_list:
+                    with torch.no_grad():
+                        prediction_list.append(
+                            [float(el) for el in model(ids, mask).cpu().numpy()]
+                        )
+                prediction_list = np.array(prediction_list)
+                pred_list_for_current_context = np.mean(prediction_list, 0)
+                uncertainty_list_for_current_context = np.var(prediction_list, 0)
 
         pred_list_for_current_context = [
             float(el) for el in pred_list_for_current_context
@@ -186,7 +174,6 @@ if __name__ == "__main__":
         default=42,
         help="random seed during training",
     )
-    parser.add_argument("--is_aux_model", type=str2bool, default=False)
 
     args = parser.parse_args()
 

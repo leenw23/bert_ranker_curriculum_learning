@@ -7,28 +7,18 @@ import wget
 
 from utils import get_uttr_token
 
-def _read_txt_files(fname: str):
-    assert os.path.exists(fname)
-    with open(fname, "r", encoding='UTF8') as f:
-        ls = [el.strip().split("|||") for el in f.readlines()]
-    return ls
-
 def get_dd_corpus(setname):
     assert setname in ["train", "valid", "test"]
     daily_fname = "./data/dailydialog/{}/{}.txt".format(setname, setname)
-    blended_fname = "./data/blended_skill_talk/{}/{}.txt".format(setname, setname)
-    assert os.path.exists(daily_fname) & os.path.exists(blended_fname)
+    assert os.path.exists(daily_fname)
     
     with open(daily_fname, "r", encoding='UTF8') as f_d:
-        daily_ls = [el.strip() for el in f_d.readlines()]
-        with open(blended_fname, "r", encoding='UTF8') as f_b:
-            blended_ls = [el.strip() for el in f_b.readlines()]
-            ls = daily_ls + blended_ls
-            for idx, line in enumerate(ls):
-                line = [
-                    el.strip().lower() for el in line.split("__eou__") if el.strip() != ""
-                ]
-                ls[idx] = line
+        ls = [el.strip() for el in f_d.readlines()]
+        for idx, line in enumerate(ls):
+            line = [
+                el.strip().lower() for el in line.split("__eou__") if el.strip() != ""
+            ]
+            ls[idx] = line
     return ls
 
 def get_dd_multiref_testset(dirname="./data/"):
