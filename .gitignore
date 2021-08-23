@@ -1,0 +1,13 @@
+# *.txt
+*.png
+.ipynb_checkpoints/
+img/
+env/
+result/
+.vscode/
+__pycache__/
+logs/
+*.json
+*.jsonl
+*.xlsx
+*.pck
