@@ -48,25 +48,21 @@ class SelectionDataset(torch.utils.data.Dataset):
         uttr_token: str = "[UTTR]",
         txt_save_fname: str = None,
         tensor_save_fname: str = None,
-        corrupted_context_dataset=None,
         # add_nota_in_every_candidate=False,
     ):
-
         self.tokenizer = tokenizer
         self.max_seq_len = max_seq_len
         self.uttr_token = uttr_token
         assert setname in ["train", "dev", "test"]
+        
         txt_save_fname, tensor_save_fname = (
             txt_save_fname.format(setname),
             tensor_save_fname.format(setname),
         )
-        # self.add_nota = add_nota_in_every_candidate
+
         selection_dataset = self._get_selection_dataset(
-            raw_dataset, num_candidate, txt_save_fname, corrupted_context_dataset
+            raw_dataset, num_candidate, txt_save_fname
         )
-        # if self.add_nota:
-        #    for el in selection_dataset:
-        #        assert "[NOTA]" in el
         self.feature = self._tensorize_selection_dataset(
             selection_dataset, tensor_save_fname, num_candidate
         )
@@ -123,7 +119,7 @@ class SelectionDataset(torch.utils.data.Dataset):
         return data
 
     def _get_selection_dataset(
-        self, raw_dataset, num_candidate, txt_save_fname, corrupted_context_dataset
+        self, raw_dataset, num_candidate, txt_save_fname
     ):
         print("Selection filename: {}".format(txt_save_fname))
         if os.path.exists(txt_save_fname):
@@ -132,7 +128,7 @@ class SelectionDataset(torch.utils.data.Dataset):
                 return pickle.load(f)
 
         selection_dataset = self._make_selection_dataset(
-            raw_dataset, num_candidate, corrupted_context_dataset
+            raw_dataset, num_candidate
         )
         os.makedirs(os.path.dirname(txt_save_fname), exist_ok=True)
         with open(txt_save_fname, "wb") as f:
@@ -140,7 +136,7 @@ class SelectionDataset(torch.utils.data.Dataset):
         return selection_dataset
 
     def _make_selection_dataset(
-        self, raw_dataset, num_candidate, corrupted_context_dataset
+        self, raw_dataset, num_candidate
     ):
         """
         Returns:
@@ -164,37 +160,12 @@ class SelectionDataset(torch.utils.data.Dataset):
                     dataset.append(single_conv)
             all_responses.extend([el[1] for el in slided_conversation])
 
-        if corrupted_context_dataset is not None:
-            print("Samples with corrupted context are also included in training")
-            print("Before: {}".format(len(dataset)))
-            half_sampled_corrupt_sample = random.sample(
-                corrupted_context_dataset, int(len(dataset) / 2)
-            )
-            for corrupted_sample in tqdm(half_sampled_corrupt_sample):
-                changed_context = self.tokenizer.decode(
-                    corrupted_sample["changed_context"]
-                ).strip()
-                assert isinstance(changed_context, str)
-                assert "[CLS]" == changed_context[:5]
-                assert "[SEP]" == changed_context[-5:]
-                tmp_text = changed_context[5:-5].strip()
-                assert len(self.tokenizer.tokenize(tmp_text)) + 2 <= 300
-                dataset.append([tmp_text, "[NOTA]"])
-            print("After: {}".format(len(dataset)))
-
         for idx, el in enumerate(dataset):
             sampled_random_negative = random.sample(all_responses, num_candidate)
             if el[1] in sampled_random_negative:
                 sampled_random_negative.remove(el[1])
             sampled_random_negative = sampled_random_negative[: num_candidate - 1]
             dataset[idx].extend(sampled_random_negative)
-
-            # if not self.add_nota:
-            #     sampled_random_negative = sampled_random_negative[: num_candidate - 1]
-            #     dataset[idx].extend(sampled_random_negative)
-            # else:
-            #     sampled_random_negative = ["[NOTA]"] + sampled_random_negative[: num_candidate - 2]
-            #     dataset[idx].extend(sampled_random_negative)
             assert len(dataset[idx]) == 1 + num_candidate
             assert all([isinstance(txt, str) for txt in dataset[idx]])
         return dataset
@@ -211,6 +182,141 @@ class SelectionDataset(torch.utils.data.Dataset):
             context, response = conversation[: idx + 1], conversation[idx + 1]
             pairs.append([self.uttr_token.join(context), response])
         return pairs
+
+
+class RankingDataset(torch.utils.data.Dataset):
+    def __init__(
+        self,
+        raw_dataset,
+        tokenizer,
+        setname: str,
+        max_seq_len: int = 300,
+        uttr_token: str = "[UTTR]",
+        txt_save_fname: str = None,
+        tensor_save_fname: str = None,
+    ):
+        self.tokenizer = tokenizer
+        self.max_seq_len = max_seq_len
+        self.uttr_token = uttr_token
+        assert setname in ["train", "dev", "test"]
+        
+        txt_save_fname, tensor_save_fname = (
+            txt_save_fname.format(setname),
+            tensor_save_fname.format(setname),
+        )
+
+        ranking_dataset = self._get_ranking_dataset(
+            raw_dataset, txt_save_fname
+        )
+        self.feature = self._tensorize_ranking_dataset(
+            ranking_dataset, tensor_save_fname
+        )
+    
+    def __len__(self):
+        return len(self.feature[0])
+
+    def __getitem__(self, idx):
+        return tuple([el[idx] for el in self.feature])
+
+    def _tensorize_ranking_dataset(
+        self, ranking_dataset, tensor_save_fname
+    ):
+        if os.path.exists(tensor_save_fname):
+            print(f"{tensor_save_fname} exist!")
+            with open(tensor_save_fname, "rb") as f:
+                return pickle.load(f)
+        print("make {}".format(tensor_save_fname))
+        c_ids_list = [[]]
+        r_ids_list = [[]]
+        labels = []
+        print("Tensorize...")
+        for sample in tqdm(ranking_dataset):
+            assert len(sample) == 2 and all(
+                [isinstance(el, str) for el in sample]
+            )
+            context, response = sample[0], sample[1]
+
+            c_encoded = self.tokenizer(
+                context,
+                max_length=self.max_seq_len,
+                padding="max_length",
+                truncation=True,
+                return_tensors="pt",
+            )
+
+            r_encoded = self.tokenizer(
+                response,
+                max_length=self.max_seq_len,
+                padding="max_length",
+                truncation=True,
+                return_tensors="pt",
+            )
+
+            c_encoded_ids, r_encoded_ids = c_encoded["input_ids"], r_encoded["input_ids"]
+            
+            c_ids_list[0].append(c_encoded_ids)
+            r_ids_list[0].append(r_encoded_ids)
+            labels.append(0)
+
+        c_ids_list = [torch.stack(el) for el in c_ids_list]
+        r_ids_list = [torch.stack(el) for el in r_ids_list]
+        labels = torch.tensor(labels)
+        data = c_ids_list + r_ids_list + [labels]
+        assert len(data) == 3
+        with open(tensor_save_fname, "wb") as f:
+            pickle.dump(data, f)
+        return data
+
+    def _get_ranking_dataset(
+        self, raw_dataset, txt_save_fname
+    ):
+        print("Ranking filename: {}".format(txt_save_fname))
+        if os.path.exists(txt_save_fname):
+            print(f"{txt_save_fname} exist!")
+            with open(txt_save_fname, "rb") as f:
+                return pickle.load(f)
+
+        ranking_dataset = self._make_ranking_dataset(raw_dataset)
+        os.makedirs(os.path.dirname(txt_save_fname), exist_ok=True)
+        with open(txt_save_fname, "wb") as f:
+            pickle.dump(ranking_dataset, f)
+        return ranking_dataset
+    
+    def _make_ranking_dataset(self, raw_dataset):
+        """
+        Returns:
+            datset: List of [context(str), positive_response(str)]
+        """
+        assert isinstance(raw_dataset, list) and all(
+            [isinstance(el, list) for el in raw_dataset]
+        )
+        print(f"Serialized selection not exist. Make new file...")
+        dataset = []
+        for conv in tqdm(raw_dataset):
+            slided_conversation = self._slide_conversation(conv)
+            # Check the max sequence length
+            for single_conv in slided_conversation:
+                assert len(single_conv) == 2 and all(
+                    [isinstance(el, str) for el in single_conv]
+                )
+                concat_single_conv = " ".join(single_conv)
+                if len(self.tokenizer.tokenize(concat_single_conv)) + 3 <= 300:
+                    dataset.append(single_conv)
+        return dataset
+
+    def _slide_conversation(self, conversation):
+        """
+        multi-turn utterance로 이루어진 single conversation을 여러 개의 "context-response" pair로 만들어 반환
+        """
+        assert isinstance(conversation, list) and all(
+            [isinstance(el, str) for el in conversation]
+        )
+        pairs = []
+        for idx in range(len(conversation) - 1):
+            context, response = conversation[: idx + 1], conversation[idx + 1]
+            pairs.append([self.uttr_token.join(context), response])
+        return pairs
+
 
 
 def get_uttr_token():
@@ -243,17 +349,6 @@ def save_model(model, epoch, model_path):
             model.state_dict(),
             os.path.join(model_path, f"epoch-{epoch}.pth"),
         )
-
-
-def str2bool(v):
-    if isinstance(v, bool):
-        return v
-    if v.lower() in ("yes", "true", "t", "y", "1"):
-        return True
-    elif v.lower() in ("no", "false", "f", "n", "0"):
-        return False
-    else:
-        raise argparse.ArgumentTypeError("Boolean value expected.")
 
 
 def load_model(model, model_path, epoch, len_tokenizer):

@@ -46,33 +46,33 @@ def main_script(dirname, num_candidates):
                     print("\n")
                     continue
 
-            result[exp_dir][modelname] = {"recall": recall, "ece": ece, "brier": brier}
+            result[exp_dir][fname] = {"recall": recall, "ece": ece, "brier": brier}
 
     from openpyxl import Workbook
 
-    wb = Workbook()
-    ws = wb.active
+    # wb = Workbook()
+    # ws = wb.active
 
-    ws["B1"] = "Select"
-    ws["E1"] = "Temp"
-    ws["H1"] = "MCDrop"
-    ws["K1"] = "Ensemble"
+    # ws["B1"] = "Select"
+    # ws["E1"] = "Temp"
+    # ws["H1"] = "MCDrop"
+    # ws["K1"] = "Ensemble"
 
-    count = 3
+    # count = 3
 
-    for exp_name, exp_result in result.items():
-        ws["A" + str(count)] = exp_name.split("/")[-1]
-        for model_name, model_result in exp_result.items():
-            assert model_name in ["select", "temp", "mcdrop", "ensemble"]
-            model_index = ["select", "temp", "mcdrop", "ensemble"].index(model_name)
-            column_index = [1, 4, 7, 10][model_index]
-            ws[ascii_uppercase[column_index] + str(count)] = model_result["recall"]
-            ws[ascii_uppercase[column_index + 1] + str(count)] = model_result["ece"]
-            ws[ascii_uppercase[column_index + 2] + str(count)] = model_result["brier"]
-        count += 1
-    wb.save("result/performance/performance_{}.xlsx".format(num_candidates))
+    # for exp_name, exp_result in result.items():
+    #     ws["A" + str(count)] = exp_name.split("/")[-1]
+    #     for model_name, model_result in exp_result.items():
+    #         assert model_name in ["select", "temp", "mcdrop", "ensemble"]
+    #         model_index = ["select", "temp", "mcdrop", "ensemble"].index(model_name)
+    #         column_index = [1, 4, 7, 10][model_index]
+    #         ws[ascii_uppercase[column_index] + str(count)] = model_result["recall"]
+    #         ws[ascii_uppercase[column_index + 1] + str(count)] = model_result["ece"]
+    #         ws[ascii_uppercase[column_index + 2] + str(count)] = model_result["brier"]
+    #     count += 1
+    # wb.save("result/performance/performance_{}.xlsx".format(num_candidates))
 
-    with open("result/dump_result_{}.json".format(num_candidates), "w") as f:
+    with open("result/performance/dump_result_{}.json".format(num_candidates), "w") as f:
         json.dump(result, f)
 
 

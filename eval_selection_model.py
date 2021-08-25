@@ -23,7 +23,7 @@ from preprocess_dataset import (get_dd_corpus, get_dd_multiref_testset)
 from selection_model import BertSelect
 from utils import (SelectionDataset, dump_config,
                    get_nota_token, get_uttr_token, load_model, recall_x_at_k,
-                   set_random_seed, str2bool)
+                   set_random_seed)
 
 
 def main(args):
@@ -149,12 +149,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model_path",
         type=str,
-        default="./logs/select_batch12_candi2_seed{}/model",
+        default="./logs/select_batch12_candi5_seed{}/model",
     )
     parser.add_argument(
         "--retrieval_candidate_num",
         type=int,
-        default=2,
+        default=10,
     )
     parser.add_argument(
         "--model",
@@ -174,12 +174,18 @@ if __name__ == "__main__":
         default=42,
         help="random seed during training",
     )
+    parser.add_argument(
+        "--model_num_candidates",
+        type=int,
+        default=5,
+        help="model specification",
+    )
 
     args = parser.parse_args()
 
     assert len(args.model_path.split("/")) == 4
 
-    args.exp_name = f"{args.model}-candi{args.retrieval_candidate_num}-{args.setname}"
+    args.exp_name = f"{args.model}-{args.model_num_candidates}-candi{args.retrieval_candidate_num}-{args.setname}"
 
     args.log_path = os.path.join(args.log_path, args.corpus)
 

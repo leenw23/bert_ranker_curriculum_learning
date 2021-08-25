@@ -1,7 +1,6 @@
 import json
 import os
 import zipfile
-from typing import List, Union
 
 import wget
 
