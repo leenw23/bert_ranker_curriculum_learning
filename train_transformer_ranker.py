@@ -8,14 +8,13 @@ import torch
 import torch.nn as nn
 import transformers
 from tensorboardX import SummaryWriter
-from torch import Tensor
 from torch.nn import functional as F
-from torch.nn.modules.loss import CrossEntropyLoss, BCELoss
+from torch.nn.modules.loss import CrossEntropyLoss
 from torch.optim import Adam
-from torch.utils.data import DataLoader, Dataset, RandomSampler
+from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import DataLoader
 from tqdm import tqdm
-from transformers import BertConfig, BertModel, BertTokenizer
+from transformers import BertTokenizer
 
 from preprocess_dataset import get_dd_corpus
 from selection_model import TransformerRanker
@@ -34,7 +33,6 @@ def main(args):
     tokenizer.add_special_tokens(special_tokens_dict)
 
     model = TransformerRanker(len(tokenizer), 256, 8, 3)
-    # model = torch.nn.DataParallel(model)
     model.to(device)
 
     raw_dd_train, raw_dd_dev = get_dd_corpus("train"), get_dd_corpus("valid")
@@ -87,19 +85,26 @@ def main(args):
         model.train()
         for step, batch in enumerate(tqdm(trainloader)):
             optimizer.zero_grad()
-            c_ids_list, r_ids_list, label = (batch[0], batch[1], batch[2])
-            label = label.to(device)
-            bs = label.shape[0]
+            c_ids_list, r_ids_list = (batch[0], batch[1])
+            bs = c_ids_list.shape[0]
             
             c_ids_list = c_ids_list.reshape(bs, 300).to(device)
             r_ids_list = r_ids_list.reshape(bs, 300).to(device)
 
             output = model(c_ids_list, r_ids_list)
-            
-            for i in range(bs):
-                output[i,[0, i]] = output[i, [i, 0]]
+
+            label = [i for i in range(bs)]
+            label = torch.tensor(label).to(device)
 
             loss = crossentropy(output, label)
+            
+            # max_score, max_idxs = torch.max(output, 1)
+            # correct_predictions = (max_idxs == label).sum()
+
+            # if step % 100 == 0:
+            #     print("loss: ", loss)
+            #     print("correct_predictions: ", correct_predictions)
+
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 5.0)
             optimizer.step()
@@ -112,18 +117,26 @@ def main(args):
         try:
             with torch.no_grad():
                 for step, batch in enumerate(tqdm(validloader)):
-                    c_ids_list, r_ids_list, label = (batch[0], batch[1], batch[2])
-                    label = label.to(device)
-                    bs = label.shape[0]
+                    c_ids_list, r_ids_list = (batch[0], batch[1])
+                    bs = c_ids_list.shape[0]
 
                     c_ids_list = c_ids_list.reshape(bs, 300).to(device)
                     r_ids_list = r_ids_list.reshape(bs, 300).to(device)
                     
                     output = model(c_ids_list, r_ids_list)
-                    for i in range(bs):
-                        output[i,[0, i]] = output[i, [i, 0]]
+
+                    label = [i for i in range(bs)]
+                    label = torch.tensor(label).to(device)
 
                     loss = crossentropy(output, label)
+                    
+                    # max_score, max_idxs = torch.max(output, 1)
+                    # correct_predictions = (max_idxs == label).sum()
+
+                    # if step % 10 == 0:
+                    #     print("loss: ", loss)
+                    #     print("correct_predictions: ", correct_predictions)
+
                     loss_list.append(loss.cpu().detach().numpy())
                     write2tensorboard(writer, {"loss": loss}, "train", global_step)
                 final_loss = sum(loss_list) / len(loss_list)
@@ -143,7 +156,7 @@ if __name__ == "__main__":
     parser.add_argument("--log_path", type=str, default="logs")
     parser.add_argument("--batch_size", type=int, default=128)
     parser.add_argument("--lr", type=float, default=2e-5)
-    parser.add_argument("--epoch", type=int, default=25)
+    parser.add_argument("--epoch", type=int, default=10)
     parser.add_argument(
         "--random_initialization", type=str, default="False", choices=["True", "False"]
     )

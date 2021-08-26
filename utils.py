@@ -228,9 +228,8 @@ class RankingDataset(torch.utils.data.Dataset):
         print("make {}".format(tensor_save_fname))
         c_ids_list = [[]]
         r_ids_list = [[]]
-        labels = []
         print("Tensorize...")
-        for sample in tqdm(ranking_dataset):
+        for s_idx, sample in enumerate(tqdm(ranking_dataset)):
             assert len(sample) == 2 and all(
                 [isinstance(el, str) for el in sample]
             )
@@ -256,13 +255,12 @@ class RankingDataset(torch.utils.data.Dataset):
             
             c_ids_list[0].append(c_encoded_ids)
             r_ids_list[0].append(r_encoded_ids)
-            labels.append(0)
 
         c_ids_list = [torch.stack(el) for el in c_ids_list]
         r_ids_list = [torch.stack(el) for el in r_ids_list]
-        labels = torch.tensor(labels)
-        data = c_ids_list + r_ids_list + [labels]
-        assert len(data) == 3
+
+        data = c_ids_list + r_ids_list
+        assert len(data) == 2
         with open(tensor_save_fname, "wb") as f:
             pickle.dump(data, f)
         return data
@@ -352,7 +350,8 @@ def save_model(model, epoch, model_path):
 
 
 def load_model(model, model_path, epoch, len_tokenizer):
-    model.bert.resize_token_embeddings(len_tokenizer)
+    if "selection" in model_path:
+        model.bert.resize_token_embeddings(len_tokenizer)
     model.load_state_dict(torch.load(model_path + f"/epoch-{epoch}.pth"))
     return model
 

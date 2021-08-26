@@ -32,8 +32,7 @@ def main(args):
 
     UTTR_TOKEN = get_uttr_token()
     
-    # NOTA 삭제해야함
-    special_tokens_dict = {"additional_special_tokens": [UTTR_TOKEN, "[NOTA]"]}
+    special_tokens_dict = {"additional_special_tokens": [UTTR_TOKEN]}
     tokenizer.add_special_tokens(special_tokens_dict)
 
     if not args.random_initialization:

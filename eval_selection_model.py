@@ -32,9 +32,8 @@ def main(args):
     device = torch.device("cuda")
     tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
     UTTR_TOKEN = get_uttr_token()
-    NOTA_TOKEN = get_nota_token()
 
-    special_tokens_dict = {"additional_special_tokens": [UTTR_TOKEN, NOTA_TOKEN]}
+    special_tokens_dict = {"additional_special_tokens": [UTTR_TOKEN]}
     tokenizer.add_special_tokens(special_tokens_dict)
 
     model_list = []
@@ -43,6 +42,7 @@ def main(args):
         bert = BertModel.from_pretrained("bert-base-uncased")
         bert.resize_token_embeddings(len(tokenizer))
         model = BertSelect(bert)
+        model = torch.nn.DataParallel(model)
         model = load_model(model, args.model_path.format(seed), 0, len(tokenizer))
 
     model.to(device)
