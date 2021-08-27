@@ -48,7 +48,6 @@ class SelectionDataset(torch.utils.data.Dataset):
         uttr_token: str = "[UTTR]",
         txt_save_fname: str = None,
         tensor_save_fname: str = None,
-        # add_nota_in_every_candidate=False,
     ):
         self.tokenizer = tokenizer
         self.max_seq_len = max_seq_len
@@ -183,7 +182,102 @@ class SelectionDataset(torch.utils.data.Dataset):
             pairs.append([self.uttr_token.join(context), response])
         return pairs
 
+# Constructing SelectionDataset with Corpus-Level Curriculum = SelectionDataset_CC
+class SelectionDataset_CC(torch.utils.data.Dataset):
+    def __init__(
+        self,
+        raw_dataset,
+        tokenizer,
+        setname: str,
+        max_seq_len: int = 300,
+        num_candidate: int = 10,
+        uttr_token: str = "[UTTR]",
+        txt_save_fname: str = None,
+        tensor_save_fname: str = None,
+        ranking_fname: str = None
+    ):
+        self.tokenizer = tokenizer
+        self.max_seq_len = max_seq_len
+        self.uttr_token = uttr_token
+        assert setname in ["train", "dev", "test"]
 
+        cc_txt_save_fname, cc_tensor_save_fname = (
+            txt_save_fname.format(setname+"_cc"),
+            tensor_save_fname.format(setname+"_cc"),
+        )
+        
+        txt_save_fname, tensor_save_fname = (
+            txt_save_fname.format(setname),
+            tensor_save_fname.format(setname),
+        )
+
+        selection_cc_dataset = self._get_selection_cc_dataset(
+            raw_dataset, num_candidate, tensor_save_fname, ranking_fname, cc_txt_save_fname
+        )
+        self.feature = self._tensorize_selection_cc_dataset(
+            selection_cc_dataset, tensor_save_fname, num_candidate, cc_tensor_save_fname
+        )
+    
+    def __len__(self):
+        return len(self.feature[0])
+
+    def __getitem__(self, idx):
+        return tuple([el[idx] for el in self.feature])
+
+    def _tensorize_selection_cc_dataset(
+        self, selection_cc_dataset, tensor_save_fname, num_candidate, cc_tensor_save_fname
+    ):
+        if os.path.exists(cc_tensor_save_fname):
+            print(f"{cc_tensor_save_fname} exist!")
+            with open(cc_tensor_save_fname, "rb") as f:
+                return pickle.load(f)
+        
+        print("make {}".format(cc_tensor_save_fname))
+        
+        assert len(selection_cc_dataset) == 1 + 2 * num_candidate
+        with open(cc_tensor_save_fname, "wb") as f:
+            pickle.dump(selection_cc_dataset, f)
+        return selection_cc_dataset
+    
+    def _get_selection_cc_dataset(
+        self, raw_dataset, num_candidate, tensor_save_fname, ranking_fname, cc_txt_save_fname
+    ):
+        if os.path.exists(cc_txt_save_fname):
+            print(f"{cc_txt_save_fname} exist!")
+            with open(cc_txt_save_fname, "rb") as f:
+                return pickle.load(f)
+        assert os.path.exists(tensor_save_fname)
+        assert os.path.exists(ranking_fname)
+        print("Origin Selection filename: {}".format(tensor_save_fname))
+        with open(tensor_save_fname, "rb") as f_o:
+            origin_dataset = pickle.load(f_o)
+
+        print("Ranking filename: {}".format(ranking_fname))
+        with open(ranking_fname, "rb") as f_r:
+            ranking_score = pickle.load(f_r)
+
+        cc_d_score, cc_d_ranking = ranking_score
+        cc_d_ranking = cc_d_ranking.reshape(-1)
+
+        selection_cc_dataset = []
+
+        for i, data in enumerate(origin_dataset):
+            temp_data = None
+            if i == len(origin_dataset)-1:
+                temp_data = data[cc_d_ranking]
+            else:
+                temp_data = data[cc_d_ranking, :]
+
+            selection_cc_dataset.append(temp_data)
+
+        assert len(origin_dataset) == len(selection_cc_dataset)
+        with open(cc_txt_save_fname, "wb") as f:
+            pickle.dump(selection_cc_dataset, f)
+        
+        return selection_cc_dataset
+
+
+# Constructing RankingDataset for training trainsformer ranker
 class RankingDataset(torch.utils.data.Dataset):
     def __init__(
         self,
@@ -314,7 +408,6 @@ class RankingDataset(torch.utils.data.Dataset):
             context, response = conversation[: idx + 1], conversation[idx + 1]
             pairs.append([self.uttr_token.join(context), response])
         return pairs
-
 
 
 def get_uttr_token():

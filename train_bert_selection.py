@@ -1,6 +1,7 @@
 import argparse
 import os
 import pickle
+from random import shuffle
 
 import numpy as np
 import scipy
@@ -19,7 +20,7 @@ from transformers import BertConfig, BertModel, BertTokenizer
 
 from preprocess_dataset import get_dd_corpus
 from selection_model import BertSelect
-from utils import (SelectionDataset, dump_config, get_uttr_token, save_model, set_random_seed, write2tensorboard)
+from utils import (SelectionDataset, SelectionDataset_CC, dump_config, get_uttr_token, save_model, set_random_seed, write2tensorboard)
 
 
 def main(args):
@@ -47,37 +48,65 @@ def main(args):
     raw_dd_train, raw_dd_dev = get_dd_corpus("train"), get_dd_corpus("valid")
 
     print("Load begin!")
-    
-    train_dataset = SelectionDataset(
-        raw_dd_train,
-        tokenizer,
-        "train",
-        300,
-        args.retrieval_candidate_num,
-        UTTR_TOKEN,
-        "./data/selection/text_cand{}".format(args.retrieval_candidate_num) + "_{}.pck",
-        "./data/selection/tensor_cand{}".format(args.retrieval_candidate_num) + "_{}.pck",
-    )
 
-    dev_dataset = SelectionDataset(
-        raw_dd_dev,
-        tokenizer,
-        "dev",
-        300,
-        args.retrieval_candidate_num,
-        UTTR_TOKEN,
-        "./data/selection/text_cand{}".format(args.retrieval_candidate_num) + "_{}.pck",
-        "./data/selection/tensor_cand{}".format(args.retrieval_candidate_num) + "_{}.pck",
-    )
-    print("Load end!")
+    if args.curriculum == "cc":
+        train_dataset = SelectionDataset_CC(
+            raw_dd_train,
+            tokenizer,
+            "train",
+            300,
+            args.retrieval_candidate_num,
+            UTTR_TOKEN,
+            "./data/selection/text_cand{}".format(args.retrieval_candidate_num) + "_{}.pck",
+            "./data/selection/tensor_cand{}".format(args.retrieval_candidate_num) + "_{}.pck", 
+            "./data/selection/dd_cand5/cc_ranking_train.pck", 
+        )
+
+        dev_dataset = SelectionDataset_CC(
+            raw_dd_dev,
+            tokenizer,
+            "dev",
+            300,
+            args.retrieval_candidate_num,
+            UTTR_TOKEN,
+            "./data/selection/text_cand{}".format(args.retrieval_candidate_num) + "_{}.pck",
+            "./data/selection/tensor_cand{}".format(args.retrieval_candidate_num) + "_{}.pck",
+            "./data/selection/dd_cand5/cc_ranking_valid.pck", 
+        )
+        shuffle_status = False
+    else:
+        train_dataset = SelectionDataset(
+            raw_dd_train,
+            tokenizer,
+            "train",
+            300,
+            args.retrieval_candidate_num,
+            UTTR_TOKEN,
+            "./data/selection/text_cand{}".format(args.retrieval_candidate_num) + "_{}.pck",
+            "./data/selection/tensor_cand{}".format(args.retrieval_candidate_num) + "_{}.pck",
+        )
+
+        dev_dataset = SelectionDataset(
+            raw_dd_dev,
+            tokenizer,
+            "dev",
+            300,
+            args.retrieval_candidate_num,
+            UTTR_TOKEN,
+            "./data/selection/text_cand{}".format(args.retrieval_candidate_num) + "_{}.pck",
+            "./data/selection/tensor_cand{}".format(args.retrieval_candidate_num) + "_{}.pck",
+        )
+        shuffle_status = True
 
     trainloader = DataLoader(
         train_dataset,
-        shuffle=True,
+        shuffle=shuffle_status,
         batch_size=args.batch_size,
         drop_last=True,
     )
     validloader = DataLoader(dev_dataset, batch_size=args.batch_size, drop_last=True)
+
+    print("Load end!")
 
     """
     Training
@@ -167,12 +196,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--exp_name",
         type=str,
-        default="select_batch12_candi2",
+        default="cc_select_batch12_candi5",
     )
     parser.add_argument("--log_path", type=str, default="logs")
     parser.add_argument("--batch_size", type=int, default=12)
     parser.add_argument("--lr", type=float, default=2e-5)
-    parser.add_argument("--epoch", type=int, default=3)
+    parser.add_argument("--epoch", type=int, default=2)
+    parser.add_argument("--curriculum", type=str, default="cc")
     parser.add_argument(
         "--retrieval_candidate_num",
         type=int,
