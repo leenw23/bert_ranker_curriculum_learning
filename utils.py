@@ -443,7 +443,7 @@ def save_model(model, epoch, model_path):
 
 
 def load_model(model, model_path, epoch, len_tokenizer):
-    if "selection" in model_path:
+    if "select" in model_path:
         model.bert.resize_token_embeddings(len_tokenizer)
     model.load_state_dict(torch.load(model_path + f"/epoch-{epoch}.pth"))
     return model

@@ -201,7 +201,7 @@ if __name__ == "__main__":
     parser.add_argument("--log_path", type=str, default="logs")
     parser.add_argument("--batch_size", type=int, default=12)
     parser.add_argument("--lr", type=float, default=2e-5)
-    parser.add_argument("--epoch", type=int, default=2)
+    parser.add_argument("--epoch", type=int, default=3)
     parser.add_argument("--curriculum", type=str, default="cc")
     parser.add_argument(
         "--retrieval_candidate_num",

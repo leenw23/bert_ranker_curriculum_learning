@@ -16,14 +16,11 @@ from torch.optim.adamw import AdamW
 from torch.utils.data import DataLoader, Dataset, RandomSampler
 from torch.utils.data.dataloader import DataLoader
 from tqdm import tqdm
-from transformers import (BertConfig, BertForNextSentencePrediction, BertModel,
-                          BertTokenizer)
+from transformers import (BertModel, BertTokenizer)
 
-from preprocess_dataset import (get_dd_corpus, get_dd_multiref_testset)
+from preprocess_dataset import get_dd_corpus
 from selection_model import BertSelect
-from utils import (SelectionDataset, dump_config,
-                   get_nota_token, get_uttr_token, load_model, recall_x_at_k,
-                   set_random_seed)
+from utils import (SelectionDataset, get_uttr_token, load_model, recall_x_at_k, set_random_seed)
 
 
 def main(args):
@@ -42,8 +39,8 @@ def main(args):
         bert = BertModel.from_pretrained("bert-base-uncased")
         bert.resize_token_embeddings(len(tokenizer))
         model = BertSelect(bert)
-        model = torch.nn.DataParallel(model)
-        model = load_model(model, args.model_path.format(seed), 0, len(tokenizer))
+        # model = torch.nn.DataParallel(model)
+        model = load_model(model, args.model_path.format(seed), args.t_epoch, len(tokenizer))
 
     model.to(device)
     model_list.append(model)
@@ -146,10 +143,12 @@ if __name__ == "__main__":
     parser.add_argument("--corpus", default="dd", choices=["persona", "dd"])
     parser.add_argument("--setname", default="test", choices=["valid", "test"])
     parser.add_argument("--log_path", type=str, default="result")
+    parser.add_argument("--curriculum", type=str, default="cc")
+    parser.add_argument("--t_epoch", type=int, default=0)
     parser.add_argument(
         "--model_path",
         type=str,
-        default="./logs/select_batch12_candi5_seed{}/model",
+        default="./logs/cc_select_batch12_candi5_seed{}/model",
     )
     parser.add_argument(
         "--retrieval_candidate_num",
@@ -185,7 +184,7 @@ if __name__ == "__main__":
 
     assert len(args.model_path.split("/")) == 4
 
-    args.exp_name = f"{args.model}-{args.model_num_candidates}-candi{args.retrieval_candidate_num}-{args.setname}"
+    args.exp_name = f"{args.curriculum}-{args.model}-{args.model_num_candidates}-candi{args.retrieval_candidate_num}-{args.setname}"
 
     args.log_path = os.path.join(args.log_path, args.corpus)
 

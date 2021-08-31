@@ -35,7 +35,7 @@ def main(args):
     seed_list = [42] if args.model != "ensemble" else [42, 43, 44, 45, 46]
     for seed in seed_list:
         model = TransformerRanker(len(tokenizer), 256, 8, 3)
-        model = load_model(model, args.model_path.format(seed), 0, len(tokenizer))
+        model = load_model(model, args.model_path.format(seed), args.t_epoch, len(tokenizer))
 
     model.to(device)
     model_list.append(model)
@@ -106,9 +106,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model_path",
         type=str,
-        default="./logs/ranking_batch128_seed{}/model",
+        default="./logs/cc_select_batch12_candi5_seed{}/model",
     )
     parser.add_argument("--batch_size", type=int, default=128)
+    parser.add_argument("--t_epoch", type=int, default=29)
     parser.add_argument(
         "--model",
         default="ranking",

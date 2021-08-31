@@ -109,7 +109,7 @@ if __name__ == "__main__":
         type=str,
         default="./logs/ranking_batch128_seed{}/model",
     )
-    parser.add_argument("--target_epoch", type=int, default=9)
+    parser.add_argument("--target_epoch", type=int, default=29)
     parser.add_argument(
         "--tensor_save_path",
         type=str,
