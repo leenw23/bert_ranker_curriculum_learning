@@ -120,15 +120,21 @@ def main(args):
 
     save_model(model, "begin", args.model_path)
     global_step = 0
+
+    if args.aum:
+        data_len = len(train_dataset)
+        aum_score = [[] for _ in range(data_len)]
+
     for epoch in range(args.epoch):
         print("Epoch {}".format(epoch))
         model.train()
         for step, batch in enumerate(tqdm(trainloader)):
             optimizer.zero_grad()
-            ids_list, mask_list, label = (
+            ids_list, mask_list, label, data_idx = (
                 batch[: args.retrieval_candidate_num],
                 batch[args.retrieval_candidate_num : 2 * args.retrieval_candidate_num],
                 batch[2 * args.retrieval_candidate_num],
+                batch[2 * args.retrieval_candidate_num+1]
             )
             label = label.to(device)
             bs = label.shape[0]
@@ -150,6 +156,15 @@ def main(args):
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 5.0)
             optimizer.step()
+
+            if args.aum:
+                record_output = output.cpu().detach().numpy()
+                pos_output = torch.Tensor(record_output[:, 0])
+                neg_outputs = torch.Tensor(record_output[:, 1:])
+                neg_max, _ = torch.max(neg_outputs, 1)
+                batch_aum = pos_output - neg_max
+                for b_idx, idx in enumerate(data_idx):
+                    aum_score[idx].append(batch_aum[b_idx])
 
             write2tensorboard(writer, {"loss": loss}, "train", global_step)
             global_step += 1
@@ -188,7 +203,12 @@ def main(args):
                 write2tensorboard(writer, {"loss": final_loss}, "valid", global_step)
         except Exception as err:
             print(err)
+        
         save_model(model, epoch, args.model_path)
+        
+        if args.aum:
+            with open("./data/selection/aum_cand5/aum_ranking.pck", "wb") as f:
+                pickle.dump(aum_score, f)
 
 if __name__ == "__main__":
 
@@ -196,13 +216,14 @@ if __name__ == "__main__":
     parser.add_argument(
         "--exp_name",
         type=str,
-        default="cc_select_batch12_candi5",
+        default="aum_select_batch12_candi5",
     )
     parser.add_argument("--log_path", type=str, default="logs")
     parser.add_argument("--batch_size", type=int, default=12)
     parser.add_argument("--lr", type=float, default=2e-5)
     parser.add_argument("--epoch", type=int, default=3)
-    parser.add_argument("--curriculum", type=str, default="cc")
+    parser.add_argument("--curriculum", type=str, default="basic", choices=["basic", "cc"])
+    parser.add_argument("--aum", type=bool, default=True)
     parser.add_argument(
         "--retrieval_candidate_num",
         type=int,

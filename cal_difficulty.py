@@ -27,7 +27,7 @@ def cal_cc_difficulty(dataloader, model, device, tensor_save_fname):
 
     with torch.no_grad():
         for step, batch in enumerate(tqdm(dataloader)):
-            c_ids_list, r_ids_list = (batch[0], batch[1])
+            c_ids_list, r_ids_list, data_idx = (batch[0], batch[1], batch[2])
             bs = c_ids_list.shape[0]
             
             c_ids_list = c_ids_list.reshape(bs, 300).to(device)
@@ -45,9 +45,9 @@ def cal_cc_difficulty(dataloader, model, device, tensor_save_fname):
         cc_d = 1 - cc_d/torch.max(cc_d)
         cc_d_score, cc_d_ranking = torch.sort(cc_d, dim=1, descending=False)
 
-        data = [cc_d_score] + [cc_d_ranking]
+        data = [cc_d_score] + [cc_d_ranking] + [data_idx]
 
-        assert len(data) == 2
+        assert len(data) == 3
         with open(tensor_save_fname, "wb") as f:
             pickle.dump(data, f)
 

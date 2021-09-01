@@ -83,6 +83,8 @@ class SelectionDataset(torch.utils.data.Dataset):
         ids_list = [[] for _ in range(num_candidate)]
         masks_list = [[] for _ in range(num_candidate)]
         labels = []
+        data_idx = [i for i in range(len(selection_dataset))]
+        print("data_idx_len: ", len(data_idx))
         print("Tensorize...")
         for sample_idx, sample in enumerate(tqdm(selection_dataset)):
             assert len(sample) == 1 + num_candidate and all(
@@ -111,8 +113,9 @@ class SelectionDataset(torch.utils.data.Dataset):
         ids_list = [torch.stack(el) for el in ids_list]
         masks_list = [torch.stack(el) for el in masks_list]
         labels = torch.tensor(labels)
-        data = ids_list + masks_list + [labels]
-        assert len(data) == 1 + 2 * num_candidate
+        data_idx = torch.tensor(data_idx)
+        data = ids_list + masks_list + [labels] + [data_idx]
+        assert len(data) == 2 + 2 * num_candidate
         with open(tensor_save_fname, "wb") as f:
             pickle.dump(data, f)
         return data
@@ -263,7 +266,8 @@ class SelectionDataset_CC(torch.utils.data.Dataset):
 
         for i, data in enumerate(origin_dataset):
             temp_data = None
-            if i == len(origin_dataset)-1:
+            # data_idx or labels
+            if i == len(origin_dataset)-1 or i == len(origin_dataset)-2:
                 temp_data = data[cc_d_ranking]
             else:
                 temp_data = data[cc_d_ranking, :]
@@ -323,6 +327,7 @@ class RankingDataset(torch.utils.data.Dataset):
         c_ids_list = [[]]
         r_ids_list = [[]]
         print("Tensorize...")
+
         for s_idx, sample in enumerate(tqdm(ranking_dataset)):
             assert len(sample) == 2 and all(
                 [isinstance(el, str) for el in sample]
@@ -352,9 +357,11 @@ class RankingDataset(torch.utils.data.Dataset):
 
         c_ids_list = [torch.stack(el) for el in c_ids_list]
         r_ids_list = [torch.stack(el) for el in r_ids_list]
+        data_idx = [i for i in range(len(ranking_dataset))]
+        data_idx = torch.tensor(data_idx)
 
-        data = c_ids_list + r_ids_list
-        assert len(data) == 2
+        data = c_ids_list + r_ids_list + data_idx
+        assert len(data) == 3
         with open(tensor_save_fname, "wb") as f:
             pickle.dump(data, f)
         return data
